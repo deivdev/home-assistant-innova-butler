@@ -42,8 +42,12 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
     _attr_has_entity_name = True
     _attr_name = None
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.AUTO]
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
+    )
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
 
     def __init__(
         self,
@@ -92,7 +96,7 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
         if standby:
             self._attr_hvac_mode = HVACMode.OFF
         else:
-            # When the device is on, we can show its actual operating mode (HEAT/COOL)
+            # When the device is on, show actual operating mode (HEAT/COOL)
             if device.get("home_mode", 0) == 0:
                 self._attr_hvac_mode = HVACMode.HEAT
             else:
@@ -115,10 +119,20 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
         """Set new HVAC mode."""
         if hvac_mode == HVACMode.OFF:
             await self.coordinator.api.async_power_off_device(self._device_uid)
-        elif hvac_mode == HVACMode.AUTO:
-            # AUTO is used to represent the "ON" state.
+        elif hvac_mode in (HVACMode.HEAT, HVACMode.COOL):
+            # HEAT/COOL mode is determined by home setting, selecting either turns on device
             await self.coordinator.api.async_power_on_device(self._device_uid)
         else:
             _LOGGER.warning("Unsupported HVAC mode selected: %s", hvac_mode)
             return
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_on(self) -> None:
+        """Turn on the device."""
+        await self.coordinator.api.async_power_on_device(self._device_uid)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self) -> None:
+        """Turn off the device."""
+        await self.coordinator.api.async_power_off_device(self._device_uid)
         await self.coordinator.async_request_refresh()

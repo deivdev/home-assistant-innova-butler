@@ -1,8 +1,6 @@
 {
-	"name": "Innova Butler by deiv",
-    "homeassistant": "2024.9.0",
-    "country": "IT",
-    "render_readme": true,
-    "domains": ["innova_butler"],
-    "iot_class": "local_polling"
+  "name": "Innova Butler",
+  "homeassistant": "2024.9.0",
+  "render_readme": true,
+  "iot_class": "local_polling"
 }
