@@ -14,6 +14,7 @@ API_PATH = "/installedplugin/com.innova.ambiente/2.0/server/index.php"
 SET_SETPOINT_ACTION = "setSetPoint"
 POWER_OFF_DEVICE_ACTION = "powerOffDevice"
 POWER_ON_DEVICE_ACTION = "powerOnDevice"
+SET_FUNCTION_ACTION = "setFunction"
 
 
 class InnovaButlerApiError(Exception):
@@ -108,8 +109,13 @@ class InnovaButlerApi:
 
     async def async_power_on_device(self, device_uid: str) -> None:
         """Power on the device."""
-        payload = {"value": "1"} 
+        payload = {"value": "1"}
         await self._async_send_command(POWER_ON_DEVICE_ACTION, device_uid, payload)
+
+    async def async_set_function(self, device_uid: str, function: int) -> None:
+        """Set the function/preset for a device."""
+        payload = {"function": str(function)}
+        await self._async_send_command(SET_FUNCTION_ACTION, device_uid, payload)
 
     def parse_devices(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         """Parse devices from API response."""
