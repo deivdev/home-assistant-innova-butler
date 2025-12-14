@@ -13,7 +13,7 @@ from .coordinator import InnovaButlerCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-type InnovaButlerConfigEntry = ConfigEntry[InnovaButlerCoordinator]
+InnovaButlerConfigEntry = ConfigEntry[InnovaButlerCoordinator]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: InnovaButlerConfigEntry) -> bool:
