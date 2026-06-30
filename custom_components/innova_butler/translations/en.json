@@ -19,6 +19,20 @@
     }
   },
   "entity": {
+    "climate": {
+      "innova_butler": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto": "Auto",
+              "night": "Night",
+              "min": "Min",
+              "max": "Max"
+            }
+          }
+        }
+      }
+    },
     "sensor": {
       "temperature": {
         "name": "Temperature"

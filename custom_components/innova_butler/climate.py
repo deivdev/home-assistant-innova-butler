@@ -36,23 +36,24 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-# Preset mapping for cooling mode
-PRESET_HOME = "home"
-PRESET_SLEEP = "sleep"
-PRESET_ECO = "eco"
-PRESET_BOOST = "boost"
+# Fan-coil "function" presets, matching the device's own labels
+# (FUNCTION_AUTO / FUNCTION_NIGHT / FUNCTION_MIN / FUNCTION_MAX).
+PRESET_AUTO = "auto"
+PRESET_NIGHT = "night"
+PRESET_MIN = "min"
+PRESET_MAX = "max"
 
-COOLING_PRESETS = [PRESET_HOME, PRESET_SLEEP, PRESET_ECO, PRESET_BOOST]
-
-# Map function values to preset names
+# Map the device function value (1..4) to a preset name and back.
 FUNCTION_TO_PRESET = {
-    1: PRESET_HOME,
-    2: PRESET_SLEEP,
-    3: PRESET_ECO,
-    4: PRESET_BOOST,
+    1: PRESET_AUTO,
+    2: PRESET_NIGHT,
+    3: PRESET_MIN,
+    4: PRESET_MAX,
 }
 
 PRESET_TO_FUNCTION = {v: k for k, v in FUNCTION_TO_PRESET.items()}
+
+PRESET_MODES = [PRESET_AUTO, PRESET_NIGHT, PRESET_MIN, PRESET_MAX]
 
 
 class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEntity):
@@ -61,6 +62,7 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
     _attr_has_entity_name = True
     _attr_name = None
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_translation_key = "innova_butler"
 
     def __init__(
         self,
@@ -123,18 +125,12 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
         # Connection status
         self._attr_available = device.get("connected", True)
 
-    @property
-    def supported_features(self) -> ClimateEntityFeature:
-        """Return supported features based on current mode."""
-        features = (
-            ClimateEntityFeature.TARGET_TEMPERATURE
-            | ClimateEntityFeature.TURN_ON
-            | ClimateEntityFeature.TURN_OFF
-        )
-        # Add preset support only in cooling mode
-        if self._home_mode == 1:
-            features |= ClimateEntityFeature.PRESET_MODE
-        return features
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.TURN_ON
+        | ClimateEntityFeature.TURN_OFF
+    )
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
@@ -145,18 +141,14 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
             return [HVACMode.OFF, HVACMode.COOL]
 
     @property
-    def preset_modes(self) -> list[str] | None:
-        """Return available preset modes (only in cooling mode)."""
-        if self._home_mode == 1:
-            return COOLING_PRESETS
-        return None
+    def preset_modes(self) -> list[str]:
+        """Return available fan-coil function presets."""
+        return PRESET_MODES
 
     @property
     def preset_mode(self) -> str | None:
-        """Return current preset mode (only in cooling mode)."""
-        if self._home_mode == 1:
-            return FUNCTION_TO_PRESET.get(self._function, PRESET_HOME)
-        return None
+        """Return the current fan-coil function preset."""
+        return FUNCTION_TO_PRESET.get(self._function)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
@@ -181,11 +173,7 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
         await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
-        """Set new preset mode (only in cooling mode)."""
-        if self._home_mode != 1:
-            _LOGGER.warning("Preset modes only available in cooling mode")
-            return
-
+        """Set a new fan-coil function preset."""
         function = PRESET_TO_FUNCTION.get(preset_mode)
         if function is None:
             _LOGGER.warning("Unknown preset mode: %s", preset_mode)
