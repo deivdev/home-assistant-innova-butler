@@ -17,5 +17,21 @@
     "abort": {
       "already_configured": "Device already configured"
     }
+  },
+  "entity": {
+    "sensor": {
+      "humidity": {
+        "name": "Humidity"
+      }
+    },
+    "select": {
+      "season": {
+        "name": "Season",
+        "state": {
+          "heating": "Heating",
+          "cooling": "Cooling"
+        }
+      }
+    }
   }
 }

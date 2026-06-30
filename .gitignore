@@ -2,3 +2,5 @@ config/*
 *.swp
 GEMINI.md
 CLAUDE.md
+__pycache__/
+*.py[cod]

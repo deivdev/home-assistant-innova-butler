@@ -30,7 +30,7 @@ async def async_setup_entry(
 
     entities = [
         InnovaButlerClimate(coordinator, device)
-        for device in coordinator.data
+        for device in coordinator.data["devices"]
     ]
 
     async_add_entities(entities)
@@ -88,7 +88,7 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
 
     def _get_device(self) -> dict[str, Any] | None:
         """Get current device data from coordinator."""
-        for device in self.coordinator.data:
+        for device in self.coordinator.data["devices"]:
             if device["uid"] == self._device_uid:
                 return device
         return None
@@ -105,6 +105,7 @@ class InnovaButlerClimate(CoordinatorEntity[InnovaButlerCoordinator], ClimateEnt
         """Update entity attributes from device data."""
         self._attr_current_temperature = device.get("temp_room")
         self._attr_target_temperature = device.get("temp_set")
+        self._attr_current_humidity = device.get("humidity")
         self._home_mode = device.get("home_mode", 0)
         self._function = device.get("function", 1)
 

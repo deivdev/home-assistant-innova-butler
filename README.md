@@ -10,6 +10,9 @@ Home Assistant integration for **Innova Butler** climate control systems.
 - Current temperature reading
 - Target temperature control
 - HVAC mode control (Heat/Cool/Off)
+- Humidity sensor for each device (on-board RH sensor)
+- Home season selector (Heating/Cooling) — switches the whole home between
+  heating and cooling, which is a home-level setting on Innova systems
 - Auto-discovery of all devices in your Innova system
 
 ## Installation

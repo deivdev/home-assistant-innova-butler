@@ -3,7 +3,11 @@ from homeassistant.const import Platform
 
 DOMAIN = "innova_butler"
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE]
+PLATFORMS: list[Platform] = [
+    Platform.CLIMATE,
+    Platform.SENSOR,
+    Platform.SELECT,
+]
 
 CONF_HOST = "host"
 

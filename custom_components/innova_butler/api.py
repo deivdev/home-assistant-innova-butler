@@ -11,10 +11,19 @@ _LOGGER = logging.getLogger(__name__)
 
 API_PATH = "/installedplugin/com.innova.ambiente/2.0/server/index.php"
 
+GET_HOMEPAGE_ACTION = "getHomepage"
+GET_SETTINGS_ACTION = "getSettings"
 SET_SETPOINT_ACTION = "setSetPoint"
 POWER_OFF_DEVICE_ACTION = "powerOffDevice"
 POWER_ON_DEVICE_ACTION = "powerOnDevice"
 SET_FUNCTION_ACTION = "setFunction"
+SET_MODE_HOME_ACTION = "setModeHome"
+
+# Home season modes (home-level)
+HOME_MODE_HEATING = 0
+HOME_MODE_COOLING = 1
+
+REQUEST_TIMEOUT = 10
 
 
 class InnovaButlerApiError(Exception):
@@ -22,7 +31,12 @@ class InnovaButlerApiError(Exception):
 
 
 class InnovaButlerApi:
-    """API client for Innova Butler thermostats."""
+    """API client for Innova Butler thermostats.
+
+    The Innova Ambiente local server accepts both read and write requests
+    over the LAN without session authentication, so no login/token handling
+    is required here.
+    """
 
     def __init__(self, host: str, session: aiohttp.ClientSession) -> None:
         """Initialize the API client."""
@@ -30,92 +44,109 @@ class InnovaButlerApi:
         self._session = session
         self._base_url = f"http://{host}{API_PATH}"
 
-    async def async_get_data(self) -> dict[str, Any]:
-        """Fetch data from the API."""
-        url = f"{self._base_url}?Action=getHomepage"
-        try:
-            async with asyncio.timeout(10):
-                async with self._session.get(url) as response:
-                    if response.status != 200:
-                        raise InnovaButlerApiError(
-                            f"API returned status {response.status}"
-                        )
-                    data = await response.json()
-
-            if not data.get("success"):
-                raise InnovaButlerApiError("API returned success=false")
-
-            return data
-
-        except asyncio.TimeoutError as err:
-            raise InnovaButlerApiError(f"Timeout connecting to {self._host}") from err
-        except aiohttp.ClientError as err:
-            raise InnovaButlerApiError(f"Error connecting to {self._host}: {err}") from err
-
-    async def _async_send_command(self, action: str, device_uid: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Send a command to the API."""
+    async def _async_request(
+        self,
+        action: str,
+        *,
+        method: str = "GET",
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Perform an HTTP request to the Innova local server."""
         url = f"{self._base_url}?Action={action}"
-        headers = {
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Accept-Language": "it-IT,it;q=0.9,fr-FR;q=0.8,fr;q=0.7,ru-RU;q=0.6,ru;q=0.5,es-ES;q=0.4,es;q=0.3,en-US;q=0.2,en;q=0.1",
-            "Connection": "keep-alive",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            # NOTE: KSESS cookie and X-keye headers might need to be dynamic
-            # For now, hardcoding based on the provided curl command.
-            # In a real scenario, these would likely be obtained during login or
-            # from the initial getHomepage response.
-#            "Cookie": "KSESS=0e097367-871a-491f-82b6-acca201e4875; KSESS=0e097367-871a-491f-82b6-acca201e4875",
-            "DNT": "1",
-            "Origin": f"http://{self._host}",
-            "Referer": f"http://{self._host}/v/1.0.66.3/plugins/com.innova.ambiente/gui/index.html",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
-            "X-Requested-With": "XMLHttpRequest",
-#            "X-keye-UserID": "3ce06650-dd83-48a0-a85e-391511520318",
-#            "x-keye-accessToken": "842a327804153d5388f66fa0d23b419e87679b748614e35f60a10f5df6b24db11e2c4c338ac1ca577bbf842225fee50a",
-        }
-        data = {
-            "deviceUid": device_uid,
-            **payload
-        }
-        
         try:
-            async with asyncio.timeout(10):
-                async with self._session.post(url, headers=headers, data=data) as response:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                async with self._session.request(method, url, data=data) as response:
                     if response.status != 200:
                         raise InnovaButlerApiError(
-                            f"API command '{action}' returned status {response.status}"
+                            f"API '{action}' returned status {response.status}"
                         )
-                    json_response = await response.json()
+                    json_response = await response.json(content_type=None)
 
             if not json_response.get("success"):
-                raise InnovaButlerApiError(f"API command '{action}' returned success=false")
+                raise InnovaButlerApiError(f"API '{action}' returned success=false")
 
             return json_response
 
         except asyncio.TimeoutError as err:
-            raise InnovaButlerApiError(f"Timeout sending command '{action}' to {self._host}") from err
+            raise InnovaButlerApiError(
+                f"Timeout on '{action}' to {self._host}"
+            ) from err
         except aiohttp.ClientError as err:
-            raise InnovaButlerApiError(f"Error sending command '{action}' to {self._host}: {err}") from err
+            raise InnovaButlerApiError(
+                f"Error on '{action}' to {self._host}: {err}"
+            ) from err
 
-    async def async_set_temperature(self, device_uid: str, temperature: float) -> None:
+    async def async_get_data(self) -> dict[str, Any]:
+        """Fetch the homepage data from the API."""
+        return await self._async_request(GET_HOMEPAGE_ACTION)
+
+    async def async_get_settings(
+        self, firmware_uid: str, device_type: str
+    ) -> dict[str, Any]:
+        """Fetch detailed settings for a device (includes humidity)."""
+        data = {"uid": firmware_uid, "type": device_type, "plugin": ""}
+        return await self._async_request(
+            GET_SETTINGS_ACTION, method="POST", data=data
+        )
+
+    async def async_set_temperature(
+        self, device_uid: str, temperature: float
+    ) -> None:
         """Set the target temperature for a device."""
-        payload = {"value": str(temperature)}
-        await self._async_send_command(SET_SETPOINT_ACTION, device_uid, payload)
+        await self._async_request(
+            SET_SETPOINT_ACTION,
+            method="POST",
+            data={"deviceUid": device_uid, "value": str(temperature)},
+        )
 
     async def async_power_off_device(self, device_uid: str) -> None:
         """Power off the device."""
-        payload = {"value": "0"} 
-        await self._async_send_command(POWER_OFF_DEVICE_ACTION, device_uid, payload)
+        await self._async_request(
+            POWER_OFF_DEVICE_ACTION,
+            method="POST",
+            data={"deviceUid": device_uid, "value": "0"},
+        )
 
     async def async_power_on_device(self, device_uid: str) -> None:
         """Power on the device."""
-        payload = {"value": "1"}
-        await self._async_send_command(POWER_ON_DEVICE_ACTION, device_uid, payload)
+        await self._async_request(
+            POWER_ON_DEVICE_ACTION,
+            method="POST",
+            data={"deviceUid": device_uid, "value": "1"},
+        )
 
     async def async_set_function(self, device_uid: str, function: int) -> None:
         """Set the function/preset for a device."""
-        payload = {"function": str(function)}
-        await self._async_send_command(SET_FUNCTION_ACTION, device_uid, payload)
+        await self._async_request(
+            SET_FUNCTION_ACTION,
+            method="POST",
+            data={"deviceUid": device_uid, "function": str(function)},
+        )
+
+    async def async_set_home_mode(self, home_uid: str, mode: int) -> None:
+        """Set the home season mode (0=heating, 1=cooling)."""
+        await self._async_request(
+            SET_MODE_HOME_ACTION,
+            method="POST",
+            data={"homeUid": home_uid, "mode": str(mode)},
+        )
+
+    def parse_homes(self, data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Parse homes (with their season mode) from API response."""
+        homes = []
+        try:
+            for home in data.get("RESULT", {}).get("user", {}).get("homes", []):
+                homes.append(
+                    {
+                        "uid": home.get("uid"),
+                        "unique_id": home.get("uniqueID", home.get("uid")),
+                        "name": home.get("name", ""),
+                        "mode": home.get("mode", 0),  # 0=heating, 1=cooling
+                    }
+                )
+        except (KeyError, TypeError) as err:
+            _LOGGER.error("Error parsing homes: %s", err)
+        return homes
 
     def parse_devices(self, data: dict[str, Any]) -> list[dict[str, Any]]:
         """Parse devices from API response."""
@@ -124,6 +155,7 @@ class InnovaButlerApi:
             homes = data.get("RESULT", {}).get("user", {}).get("homes", [])
             for home in homes:
                 home_name = home.get("name", "")
+                home_uid = home.get("uid")
                 home_mode = home.get("mode", 0)  # 0=heating, 1=cooling
                 for room in home.get("rooms", []):
                     room_name = room.get("name", "")
@@ -131,9 +163,11 @@ class InnovaButlerApi:
                         devices.append({
                             "uid": device.get("uid", device_uid),
                             "unique_id": device.get("uniqueId", device_uid),
+                            "firmware_uid": device.get("firmwareUid"),
                             "name": device.get("name", room_name),
                             "room": room_name,
                             "home": home_name,
+                            "home_uid": home_uid,
                             "home_mode": home_mode,
                             "type": device.get("type", ""),
                             "temp_room": device.get("tempRoom"),
@@ -148,6 +182,20 @@ class InnovaButlerApi:
         except (KeyError, TypeError) as err:
             _LOGGER.error("Error parsing devices: %s", err)
         return devices
+
+    def parse_humidity(self, data: dict[str, Any]) -> float | None:
+        """Parse on-board humidity (RH %) from a getSettings response."""
+        try:
+            radiante = data.get("RESULT", {}).get("settings", {}).get("RADIANTE", [])
+            for field in radiante:
+                if field.get("fieldName") == "RH":
+                    value = field.get("fieldValue")
+                    if value in (None, ""):
+                        return None
+                    return float(value)
+        except (KeyError, TypeError, ValueError) as err:
+            _LOGGER.debug("Error parsing humidity: %s", err)
+        return None
 
     def _parse_standby(self, standby: dict[str, Any]) -> bool:
         """Parse standby value (can be bool, string, or int)."""
