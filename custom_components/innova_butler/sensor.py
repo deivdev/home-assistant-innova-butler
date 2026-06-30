@@ -27,10 +27,13 @@ async def async_setup_entry(
     """Set up Innova Butler humidity sensors."""
     coordinator = entry.runtime_data
 
+    # Create a humidity sensor for every device that exposes the RH field.
+    # We probe a fresh getSettings here so the set of sensors does not depend
+    # on whether the first coordinator refresh happened to read RH in time.
     entities = [
         InnovaButlerHumiditySensor(coordinator, device)
         for device in coordinator.data["devices"]
-        if device.get("humidity") is not None
+        if device.get("firmware_uid")
     ]
 
     async_add_entities(entities)

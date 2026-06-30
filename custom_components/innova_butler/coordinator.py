@@ -50,6 +50,7 @@ class InnovaButlerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Fetch per-device humidity via getSettings and attach it in place."""
 
         async def _fetch(device: dict[str, Any]) -> None:
+            device.setdefault("humidity", None)
             firmware_uid = device.get("firmware_uid")
             device_type = device.get("type")
             if not firmware_uid or not device_type:
@@ -58,13 +59,17 @@ class InnovaButlerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 settings = await self.api.async_get_settings(
                     firmware_uid, device_type
                 )
-                device["humidity"] = self.api.parse_humidity(settings)
             except InnovaButlerApiError as err:
-                # Humidity is best-effort: don't fail the whole update.
+                # Humidity is best-effort: don't fail the whole update and
+                # keep the last known value (None if never read).
                 _LOGGER.debug(
                     "Could not fetch humidity for %s: %s",
                     device.get("name"),
                     err,
                 )
+                return
+            humidity = self.api.parse_humidity(settings)
+            if humidity is not None:
+                device["humidity"] = humidity
 
         await asyncio.gather(*(_fetch(device) for device in devices))
