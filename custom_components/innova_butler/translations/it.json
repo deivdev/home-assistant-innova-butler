@@ -20,6 +20,9 @@
   },
   "entity": {
     "sensor": {
+      "temperature": {
+        "name": "Temperatura"
+      },
       "humidity": {
         "name": "Umidità"
       }
