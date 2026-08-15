@@ -136,10 +136,14 @@ class InnovaButlerApi:
         homes = []
         try:
             for home in data.get("RESULT", {}).get("user", {}).get("homes", []):
+                # `uid` is the canonical, stable identifier used in every API
+                # write call; `uniqueID` may be missing or change between
+                # restarts, so it must never be used for entity unique_ids.
+                uid = home.get("uid")
                 homes.append(
                     {
-                        "uid": home.get("uid"),
-                        "unique_id": home.get("uniqueID", home.get("uid")),
+                        "uid": uid,
+                        "unique_id": uid,
                         "name": home.get("name", ""),
                         "mode": home.get("mode", 0),  # 0=heating, 1=cooling
                     }
@@ -160,9 +164,14 @@ class InnovaButlerApi:
                 for room in home.get("rooms", []):
                     room_name = room.get("name", "")
                     for device_uid, device in room.get("devices", {}).items():
+                        # `uid` is the canonical, stable identifier used in
+                        # every API write call; `uniqueId` may be missing or
+                        # change between restarts, so it must never be used for
+                        # entity unique_ids. Fall back to the devices dict key.
+                        uid = device.get("uid") or device_uid
                         devices.append({
-                            "uid": device.get("uid", device_uid),
-                            "unique_id": device.get("uniqueId", device_uid),
+                            "uid": uid,
+                            "unique_id": uid,
                             "firmware_uid": device.get("firmwareUid"),
                             "name": device.get("name", room_name),
                             "room": room_name,
